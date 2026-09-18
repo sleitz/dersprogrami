@@ -167,7 +167,7 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:var(--bg
 .pool-list::-webkit-scrollbar{width:3px}
 .pool-list::-webkit-scrollbar-thumb{background:var(--primary);border-radius:3px}
 
-.chip{border-radius:14px;padding:15px 18px;font-size:1.08rem;font-weight:900;cursor:grab;
+.chip{border-radius:14px;padding:15px 18px;font-size:1.08rem;font-weight:900;cursor:grab;touch-action:none;
   user-select:none;display:flex;align-items:center;justify-content:space-between;gap:8px;
   transition:all .18s;border:2px solid transparent;min-height:60px;box-shadow:0 3px 10px rgba(0,0,0,.12);letter-spacing:-.01em}
 .chip:active{cursor:grabbing}.chip:hover:not(.dep){transform:translateX(4px)}
@@ -189,7 +189,7 @@ body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:var(--bg
 .drop-td.filled{border:none;background:transparent;padding:0}
 .empty-hint{font-size:.7rem;color:#c5cadc;font-weight:600;pointer-events:none}
 
-.cell-lesson{width:100%;height:64px;border-radius:10px;display:flex;flex-direction:column;
+.cell-lesson{touch-action:none;width:100%;height:64px;border-radius:10px;display:flex;flex-direction:column;
   align-items:center;justify-content:center;font-size:1rem;font-weight:900;
   text-align:center;padding:3px 6px;position:relative;cursor:grab;line-height:1.2;transition:filter .15s}
 .cell-lesson:hover{filter:brightness(.91)}
@@ -922,7 +922,6 @@ function renderGrid(){
       td.addEventListener('dragover',e=>{e.preventDefault();td.classList.add('over')});
       td.addEventListener('dragleave',()=>td.classList.remove('over'));
       td.addEventListener('drop',e=>{e.preventDefault();td.classList.remove('over');handleDrop(dIdx,hIdx)});
-      td.addEventListener('touchend',e=>onTouchEnd(e,dIdx,hIdx));
       tr.appendChild(td);
     });
     body.appendChild(tr);
@@ -963,19 +962,88 @@ function removeLesson(key,e){
 }
 
 /* ══════════════════════════════════════
-   TOUCH
+   TOUCH / MOBİL SÜRÜKLE-BIRAK
 ══════════════════════════════════════ */
 let touchDragSrc=null;
+let touchDragging=false;
+let touchOverCell=null;
+
 function onTouchStart(e){
   const el=e.currentTarget;
-  if(el.dataset.idx!==undefined) touchDragSrc={type:'pool',lessonIdx:parseInt(el.dataset.idx)};
-  else if(el.dataset.key) touchDragSrc={type:'cell',key:el.dataset.key,lessonIdx:schedule[el.dataset.key]};
+  if(el.dataset.idx!==undefined){
+    const idx=parseInt(el.dataset.idx);
+    if(lessons[idx].remaining<=0) return;
+    touchDragSrc={type:'pool',lessonIdx:idx};
+  } else if(el.dataset.key){
+    touchDragSrc={type:'cell',key:el.dataset.key,lessonIdx:schedule[el.dataset.key]};
+  }
+  touchDragging=false;
+  touchOverCell=null;
+  el.classList.add('dragging');
 }
-function onTouchEnd(e,day,hour){
+
+function clearTouchOver(){
+  if(touchOverCell){
+    touchOverCell.classList.remove('over');
+    touchOverCell=null;
+  }
+}
+
+function onTouchMove(e){
   if(!touchDragSrc) return;
-  dragSrc=touchDragSrc; touchDragSrc=null;
-  handleDrop(day,hour);
+  const t=e.touches[0];
+  if(!t) return;
+
+  // Parmağı hareket ettirmeye başladığımız anda sayfanın
+  // kaymasını engelle ve gerçek hedef hücreyi parmağın
+  // bulunduğu noktadan bul.
+  touchDragging=true;
+  e.preventDefault();
+
+  const el=document.elementFromPoint(t.clientX,t.clientY);
+  const cell=el ? el.closest('.drop-td') : null;
+
+  if(cell!==touchOverCell){
+    clearTouchOver();
+    if(cell){
+      cell.classList.add('over');
+      touchOverCell=cell;
+    }
+  }
 }
+
+function onTouchEnd(e){
+  if(!touchDragSrc) return;
+
+  const source=touchDragSrc;
+  const target=touchOverCell;
+  const wasDragging=touchDragging;
+
+  clearTouchOver();
+  touchDragSrc=null;
+  touchDragging=false;
+
+  document.querySelectorAll('.chip.dragging,.cell-lesson.dragging')
+    .forEach(el=>el.classList.remove('dragging'));
+
+  if(!wasDragging) return;
+
+  if(target){
+    const day=parseInt(target.dataset.day);
+    const hour=parseInt(target.dataset.hour);
+    dragSrc=source;
+    handleDrop(day,hour);
+  } else {
+    dragSrc=null;
+  }
+}
+
+// Mobil için touchmove/touchend document üzerinden izlenir.
+// Böylece parmak, kaynak öğeden hedef hücreye giderken olaylar
+// kaybolmaz.
+document.addEventListener('touchmove',onTouchMove,{passive:false});
+document.addEventListener('touchend',onTouchEnd,{passive:false});
+document.addEventListener('touchcancel',onTouchEnd,{passive:false});
 
 /* ══════════════════════════════════════
    STATS
