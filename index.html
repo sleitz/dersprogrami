@@ -1243,63 +1243,128 @@ function exportCanvas(fmt){
   });
 }
 
-function exportPDF(){
-  // Mobil tarayıcılarda pencereyi kullanıcı tıklaması sırasında açmak gerekir.
-  // Canvas hazırlandıktan sonra window.open() çağrılırsa açılır pencere engellenebilir.
-  const win = window.open('','_blank');
-  if(!win){
-    showToast('PDF penceresi açılamadı. Tarayıcıda açılır pencerelere izin verin.','warn');
-    return;
-  }
-  showToast('PDF hazırlanıyor…','info');
-  win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı PDF</title>
-    <style>*{margin:0;padding:0}body{background:#fff}img{width:100%;height:auto;display:block}</style></head>
-    <body><div style="font:16px Arial;text-align:center;padding:20px">PDF hazırlanıyor…</div></body></html>`);
-  win.document.close();
+function bytesFromBase64(base64){
+  const bin=atob(base64);
+  const out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+function concatBytes(...parts){
+  const total=parts.reduce((n,p)=>n+p.length,0);
+  const out=new Uint8Array(total);
+  let pos=0;
+  parts.forEach(p=>{out.set(p,pos);pos+=p.length;});
+  return out;
+}
+function asciiBytes(str){return new TextEncoder().encode(str);}
 
+// Harici kütüphane kullanmadan gerçek PDF dosyası oluşturur.
+// Böylece PC, tablet ve telefonda sistem yazdırma önizlemesine bağlı kalmaz.
+function makePDFBlob(canvas){
+  const pageW=841.89, pageH=595.28; // A4 yatay (pt)
+  const jpg=canvas.toDataURL('image/jpeg',0.92);
+  const base64=jpg.split(',')[1];
+  const img=bytesFromBase64(base64);
+  const scale=Math.min(pageW/canvas.width,pageH/canvas.height);
+  const drawW=canvas.width*scale;
+  const drawH=canvas.height*scale;
+  const x=(pageW-drawW)/2;
+  const y=(pageH-drawH)/2;
+
+  const objects=[];
+  objects[1]=asciiBytes('<< /Type /Catalog /Pages 2 0 R >>');
+  objects[2]=asciiBytes('<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  objects[3]=asciiBytes(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>`);
+  objects[4]=concatBytes(
+    asciiBytes(`<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`),
+    img,
+    asciiBytes('\nendstream')
+  );
+  const content=`q\n${drawW.toFixed(3)} 0 0 ${drawH.toFixed(3)} ${x.toFixed(3)} ${y.toFixed(3)} cm\n/Im1 Do\nQ`;
+  objects[5]=asciiBytes(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+
+  const header=asciiBytes('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
+  let pdf=header;
+  const offsets=[0];
+  for(let i=1;i<=5;i++){
+    offsets[i]=pdf.length;
+    pdf=concatBytes(pdf,asciiBytes(`${i} 0 obj\n`),objects[i],asciiBytes('\nendobj\n'));
+  }
+  const xrefOffset=pdf.length;
+  let xref=`xref\n0 6\n0000000000 65535 f \n`;
+  for(let i=1;i<=5;i++) xref+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  xref+=`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  pdf=concatBytes(pdf,asciiBytes(xref));
+  return new Blob([pdf],{type:'application/pdf'});
+}
+
+function exportPDF(){
+  showToast('PDF hazırlanıyor…','info');
   drawScheduleCanvas(2).then(canvas=>{
-    const imgData = canvas.toDataURL('image/jpeg',0.92);
-    win.document.open();
-    win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı PDF</title>
-      <style>*{margin:0;padding:0}body{background:#fff}
-      img{width:100%;height:auto;display:block}</style></head>
-      <body><img src="${imgData}" onload="setTimeout(()=>window.print(),100)">
-</body></html>`);
-    win.document.close();
-    showToast('Yazdır penceresinde "PDF Olarak Kaydet" seçebilirsiniz.','info');
-  }).catch(()=>{
-    try{win.close();}catch(e){}
-    showToast('PDF hazırlanırken bir sorun oluştu.','error');
+    const blob=makePDFBlob(canvas);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`dersprogrami_${selClass}${selBranch}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    showToast('PDF indirildi!','success');
+  }).catch(err=>{
+    console.error('PDF oluşturma hatası:',err);
+    showToast('PDF oluşturulurken bir sorun oluştu.','error');
   });
 }
 
 function printWithBg(){
-  // Mobilde popup engellenmemesi için pencereyi doğrudan tıklama anında aç.
-  const win = window.open('','_blank');
-  if(!win){
-    showToast('Yazdırma penceresi açılamadı. Tarayıcıda açılır pencerelere izin verin.','error');
-    return;
-  }
   showToast('Yazdırma hazırlanıyor…','info');
-  win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı</title>
-    <style>*{margin:0;padding:0}body{background:#fff}
-    @media print{@page{margin:0;size:auto}body{margin:0}}
-    img{width:100%;height:auto;display:block}</style></head>
-    <body><div style="font:16px Arial;text-align:center;padding:20px">Yazdırma hazırlanıyor…</div></body></html>`);
-  win.document.close();
-
   drawScheduleCanvas(2).then(canvas=>{
-    const imgData = canvas.toDataURL('image/png');
-    win.document.open();
-    win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı</title>
-      <style>*{margin:0;padding:0}body{background:#fff}
-      @media print{@page{margin:0;size:auto}body{margin:0}}
-      img{width:100%;height:auto;display:block}</style></head>
-      <body><img src="${imgData}" onload="setTimeout(()=>window.print(),100)">
-</body></html>`);
-    win.document.close();
-  }).catch(()=>{
-    try{win.close();}catch(e){}
+    // Yeni pencere açmak yerine mevcut sayfada geçici bir yazdırma alanı kullanılır.
+    // Bu yöntem mobil tarayıcıların popup engelini ve yeni pencere önizleme sorunlarını önler.
+    let box=document.getElementById('print-output');
+    if(!box){
+      box=document.createElement('div');
+      box.id='print-output';
+      box.style.cssText='display:none;position:fixed;inset:0;background:#fff;z-index:999999;text-align:center;align-items:center;justify-content:center;';
+      document.body.appendChild(box);
+    }
+    box.innerHTML='';
+    const img=document.createElement('img');
+    img.src=canvas.toDataURL('image/png');
+    img.alt='Ders Programı';
+    img.style.cssText='display:block;width:100%;height:auto;max-width:100%;margin:0 auto;';
+    box.appendChild(img);
+
+    // Yazdırma CSS'sini bir kez ekle.
+    if(!document.getElementById('print-output-style')){
+      const st=document.createElement('style');
+      st.id='print-output-style';
+      st.textContent=`
+        @media print{
+          @page{size:A4 landscape;margin:0}
+          html,body{margin:0!important;padding:0!important;width:100%!important;background:#fff!important}
+          body > *:not(#print-output){display:none!important}
+          #print-output{display:block!important;position:static!important;width:100%!important;height:auto!important;background:#fff!important}
+          #print-output img{display:block!important;width:100%!important;height:auto!important;max-width:none!important}
+        }
+      `;
+      document.head.appendChild(st);
+    }
+
+    // Resmin DOM'a yerleşmesini bekle, ardından sistem yazdırma ekranını aç.
+    const doPrint=()=>{
+      window.onafterprint=()=>{
+        window.onafterprint=null;
+        box.style.display='none';
+      };
+      box.style.display='block';
+      setTimeout(()=>window.print(),100);
+    };
+    if(img.complete) doPrint();
+    else img.onload=doPrint;
+  }).catch(err=>{
+    console.error('Yazdırma hatası:',err);
     showToast('Yazdırma hazırlanırken bir sorun oluştu.','error');
   });
 }
