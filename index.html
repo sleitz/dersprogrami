@@ -677,8 +677,12 @@ function toggleTimeSettings(){
   showTimes=document.getElementById('chk-showtime').checked;
   document.getElementById('showtime-label').textContent=
     showTimes?'Evet, ders saatlerini göster':'Hayır, sadece ders adları';
-  document.getElementById('time-settings').style.opacity=showTimes?'1':'0.4';
-  document.getElementById('time-settings').style.pointerEvents=showTimes?'':'none';
+
+  // Saatler gösterilmeyecekse saat ayarlarını tamamen devre dışı bırak.
+  // Böylece kullanıcı saat girmeden doğrudan 3. adıma geçebilir.
+  const settings=document.getElementById('time-settings');
+  settings.style.display=showTimes?'block':'none';
+
   if(showTimes) updateTimePreview();
 }
 
@@ -762,7 +766,7 @@ document.getElementById('prep-dur').addEventListener('input',function(){
 });
 
 function updateTimePreview(){
-  if(!selClass) return;
+  if(!selClass || !showTimes) return;
   computedHours=calcHours();
   const list=document.getElementById('preview-list');
   list.innerHTML='';
