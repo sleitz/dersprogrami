@@ -511,8 +511,6 @@ function openInBrowser(){
       <button class="btn btn-primary btn-sm" onclick="exportCanvas('png')">🖼 PNG</button>
       <button class="btn btn-secondary btn-sm" onclick="exportCanvas('jpg')">📷 JPG</button>
       <button class="btn btn-secondary btn-sm" onclick="exportPDF()">📄 PDF</button>
-      <button class="btn btn-secondary btn-sm" onclick="saveLocal()">💾 Kaydet</button>
-      <button class="btn btn-secondary btn-sm" onclick="loadLocal()">📂 Yükle</button>
     </div>
   </div>
 
@@ -1100,56 +1098,6 @@ function clearSchedule(){
 }
 
 /* ══════════════════════════════════════
-   KAYDET / YÜKLE
-══════════════════════════════════════ */
-function saveLocal(){
-  const data={selClass,selBranch,schedule,showTimes,specialBreaks,
-    startTime:document.getElementById('start-time').value,
-    lessonDur:document.getElementById('lesson-dur').value,
-    breakDur:document.getElementById('break-dur').value,
-    teacher:document.getElementById('teacher-name').value.trim(),
-    school:document.getElementById('school-name').value.trim(),
-    prepOn:document.getElementById('chk-prep').checked,
-    prepDur:document.getElementById('prep-dur').value,bgColor:selBgColor};
-  try{localStorage.setItem('dersprogrami_v4',JSON.stringify(data));showToast('Kaydedildi!','success')}
-  catch(e){
-    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-    a.download=`dersprogrami_${selClass}${selBranch}.json`;a.click();
-    showToast('JSON olarak indirildi.','success');
-  }
-}
-function loadLocal(){
-  try{
-    const raw=localStorage.getItem('dersprogrami_v4');
-    if(!raw){showToast('Kayıtlı program bulunamadı.','warn');return}
-    const d=JSON.parse(raw);
-    selClass=d.selClass;selBranch=d.selBranch;showTimes=d.showTimes??true;
-    specialBreaks=d.specialBreaks||[];
-    if(d.teacher) document.getElementById('teacher-name').value=d.teacher;
-    if(d.school) document.getElementById('school-name').value=d.school;
-    if(d.startTime) document.getElementById('start-time').value=d.startTime;
-    if(d.lessonDur) document.getElementById('lesson-dur').value=d.lessonDur;
-    if(d.breakDur) document.getElementById('break-dur').value=d.breakDur;
-    if(d.prepOn!==undefined){
-      document.getElementById('chk-prep').checked=d.prepOn;
-      document.getElementById('prep-dur').style.display=d.prepOn?'inline-block':'none';
-      document.getElementById('prep-label').textContent=d.prepOn?(d.prepDur+' dk'):'Kapalı';
-    }
-    if(d.prepDur) document.getElementById('prep-dur').value=d.prepDur;
-    if(d.bgColor){selBgColor=d.bgColor;document.querySelectorAll('.swatch').forEach(s=>{if(s.style.background===d.bgColor){s.classList.add('sel');}else{s.classList.remove('sel');}});document.body.style.background=d.bgColor;}
-    document.getElementById('chk-showtime').checked=showTimes;
-    lessons=CLASS_DATA[selClass].lessons.map(l=>({...l,remaining:l.hours}));
-    schedule=d.schedule||{};
-    Object.values(schedule).forEach(idx=>{if(lessons[idx]) lessons[idx].remaining--});
-    computedHours=showTimes?calcHours():Array.from({length:6},(_,i)=>({label:`${i+1}. Ders`,time:''}));
-    renderSpecialBreaks();
-    goToStep3();
-    showToast('Program yüklendi!','success');
-  }catch(e){showToast('Yükleme başarısız.','error')}
-}
-
-/* ══════════════════════════════════════
    CANVAS ÇIKTI (PNG / JPG / PDF / Yazdır)
 ══════════════════════════════════════ */
 function rRect(ctx,x,y,w,h,r){
@@ -1307,8 +1255,6 @@ function exportPDF(){
       <style>*{margin:0;padding:0}body{background:#fff}
       img{width:100%;height:auto;display:block}</style></head>
       <body><img src="${imgData}" onload="window.print();window.onafterprint=()=>window.close()">
-<!-- İmza -->
-<div class="signature" title="Selitz">Selitz</div>
 </body></html>`);
     win.document.close();
     showToast('Yazdır → "PDF Olarak Kaydet" seçin','info');
@@ -1326,8 +1272,6 @@ function printWithBg(){
       @media print{@page{margin:0;size:auto}body{margin:0}}
       img{width:100%;height:auto;display:block}</style></head>
       <body><img src="${imgData}" onload="window.print();window.onafterprint=()=>window.close()">
-<!-- İmza -->
-<div class="signature" title="Selitz">Selitz</div>
 </body></html>`);
     win.document.close();
   });
@@ -1369,18 +1313,6 @@ document.getElementById('clear-modal').addEventListener('click',function(e){if(e
 
 
 
-function getBgSvgForPrint(){
-  if(selBgTheme==='none') return '';
-  const div = document.createElement('div');
-  div.innerHTML = BG_THEMES[selBgTheme];
-  const svg = div.querySelector('svg');
-  if(!svg) return '';
-  svg.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:.18;';
-  svg.setAttribute('preserveAspectRatio','xMidYMid slice');
-  svg.setAttribute('width','100%');
-  svg.setAttribute('height','100%');
-  return svg.outerHTML;
-}
 
 /* ══════════════════════════════════════
    SES EFEKTLERİ (Web Audio API - offline)
@@ -1416,8 +1348,5 @@ function playBlup(type){
   }catch(e){}
 }
 </script>
-
-<!-- İmza -->
-<div class="signature" title="Selitz">Selitz</div>
 </body>
 </html>
