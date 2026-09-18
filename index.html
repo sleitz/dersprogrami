@@ -1244,36 +1244,63 @@ function exportCanvas(fmt){
 }
 
 function exportPDF(){
+  // Mobil tarayıcılarda pencereyi kullanıcı tıklaması sırasında açmak gerekir.
+  // Canvas hazırlandıktan sonra window.open() çağrılırsa açılır pencere engellenebilir.
+  const win = window.open('','_blank');
+  if(!win){
+    showToast('PDF penceresi açılamadı. Tarayıcıda açılır pencerelere izin verin.','warn');
+    return;
+  }
   showToast('PDF hazırlanıyor…','info');
+  win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı PDF</title>
+    <style>*{margin:0;padding:0}body{background:#fff}img{width:100%;height:auto;display:block}</style></head>
+    <body><div style="font:16px Arial;text-align:center;padding:20px">PDF hazırlanıyor…</div></body></html>`);
+  win.document.close();
+
   drawScheduleCanvas(2).then(canvas=>{
     const imgData = canvas.toDataURL('image/jpeg',0.92);
-    const W_mm = 297, H_mm = Math.round(canvas.height/canvas.width*297);
-    // jsPDF yoksa, img içinde yeni pencere aç ve yazdır
-    const win = window.open('','_blank');
-    if(!win){showToast('Açılır pencere engellendi, PNG kullanın.','warn');return;}
+    win.document.open();
     win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı PDF</title>
       <style>*{margin:0;padding:0}body{background:#fff}
       img{width:100%;height:auto;display:block}</style></head>
-      <body><img src="${imgData}" onload="window.print();window.onafterprint=()=>window.close()">
+      <body><img src="${imgData}" onload="setTimeout(()=>window.print(),100)">
 </body></html>`);
     win.document.close();
-    showToast('Yazdır → "PDF Olarak Kaydet" seçin','info');
+    showToast('Yazdır penceresinde "PDF Olarak Kaydet" seçebilirsiniz.','info');
+  }).catch(()=>{
+    try{win.close();}catch(e){}
+    showToast('PDF hazırlanırken bir sorun oluştu.','error');
   });
 }
 
 function printWithBg(){
+  // Mobilde popup engellenmemesi için pencereyi doğrudan tıklama anında aç.
+  const win = window.open('','_blank');
+  if(!win){
+    showToast('Yazdırma penceresi açılamadı. Tarayıcıda açılır pencerelere izin verin.','error');
+    return;
+  }
   showToast('Yazdırma hazırlanıyor…','info');
+  win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı</title>
+    <style>*{margin:0;padding:0}body{background:#fff}
+    @media print{@page{margin:0;size:auto}body{margin:0}}
+    img{width:100%;height:auto;display:block}</style></head>
+    <body><div style="font:16px Arial;text-align:center;padding:20px">Yazdırma hazırlanıyor…</div></body></html>`);
+  win.document.close();
+
   drawScheduleCanvas(2).then(canvas=>{
     const imgData = canvas.toDataURL('image/png');
-    const win = window.open('','_blank');
-    if(!win){showToast('Açılır pencere engellendi!','error');return;}
+    win.document.open();
     win.document.write(`<!DOCTYPE html><html><head><title>Ders Programı</title>
       <style>*{margin:0;padding:0}body{background:#fff}
       @media print{@page{margin:0;size:auto}body{margin:0}}
       img{width:100%;height:auto;display:block}</style></head>
-      <body><img src="${imgData}" onload="window.print();window.onafterprint=()=>window.close()">
+      <body><img src="${imgData}" onload="setTimeout(()=>window.print(),100)">
 </body></html>`);
     win.document.close();
+  }).catch(()=>{
+    try{win.close();}catch(e){}
+    showToast('Yazdırma hazırlanırken bir sorun oluştu.','error');
   });
 }
 
